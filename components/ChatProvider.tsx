@@ -13,6 +13,7 @@ const ChatContext = createContext<{
   profileRevision: number;
   shortlistRevision: number;
   send: (text: string) => Promise<void>;
+  clearConversation: () => void;
 } | null>(null);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -68,7 +69,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <ChatContext.Provider value={{ messages, pending, error, savedIds, profileRevision, shortlistRevision, send }}>{children}</ChatContext.Provider>;
+  function clearConversation() {
+    if (inFlight.current) return;
+    setMessages([]);
+    setError("");
+  }
+
+  return <ChatContext.Provider value={{
+    messages, pending, error, savedIds, profileRevision, shortlistRevision, send, clearConversation,
+  }}>{children}</ChatContext.Provider>;
 }
 
 export function useCareerChat() {

@@ -6,12 +6,16 @@ import { toolNames, type JobMatch } from "@/lib/careermatch-types";
 import { useCareerChat } from "./ChatProvider";
 import { Icon, type IconName } from "./Icon";
 import { JobCard } from "./JobCard";
+import { PageHeading } from "./PageHeading";
 
 const prompts: { title: string; detail: string; text: string; icon: IconName }[] = [
   { title: "Find jobs in Chennai", detail: "Rank roles by my skills", text: "Find eligible jobs in Chennai and rank them by how well my skills match.", icon: "pin" },
   { title: "Explore skill gaps", detail: "Compare data analyst roles", text: "Which skills am I missing for eligible data analyst roles?", icon: "layers" },
   { title: "Find remote work", detail: "Explore eligible remote roles", text: "Show me remote jobs I’m eligible for and explain the best matches.", icon: "briefcase" },
+  { title: "Browse internships", detail: "Compare entry-level opportunities", text: "Find internships I’m eligible for and rank them by skill match.", icon: "bookmark" },
 ];
+
+const initialMatchCount = 4;
 
 function jobMatches(steps: AgentStep[]) {
   const matches = new Map<number, JobMatch>();
@@ -27,7 +31,7 @@ function jobMatches(steps: AgentStep[]) {
 
 function Activity({ steps }: { steps: AgentStep[] }) {
   return (
-    <details className="activity glass">
+    <details className="activity surface">
       <summary><Icon name="activity" size={17} />Agent activity <span>{steps.length} {steps.length === 1 ? "step" : "steps"}</span></summary>
       <ol>
         {steps.map((step, index) => {
@@ -52,15 +56,68 @@ function Activity({ steps }: { steps: AgentStep[] }) {
   );
 }
 
+function PromptChoices({ onChoose }: { onChoose: (text: string) => void }) {
+  return (
+    <div className="prompts">
+      {prompts.map((prompt) => (
+        <button key={prompt.title} type="button" className="surface prompt" onClick={() => onChoose(prompt.text)}>
+          <span className="tile-icon"><Icon name={prompt.icon} size={18} /></span>
+          <span className="prompt-copy"><strong>{prompt.title}</strong><span>{prompt.detail}</span></span>
+          <Icon name="arrow" size={16} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MatchResults({ matches }: { matches: JobMatch[] }) {
+  const { pending, savedIds, send } = useCareerChat();
+  const [showAll, setShowAll] = useState(false);
+  const remaining = matches.length - initialMatchCount;
+
+  return (
+    <section className="match-results" aria-label="Job matches">
+      <h2>{matches.length} {matches.length === 1 ? "job match" : "job matches"}</h2>
+      <div className="job-grid">
+        {matches.slice(0, showAll ? matches.length : initialMatchCount).map((match) => (
+          <JobCard key={match.job.id} job={match.job} score={match.score} skills={match} action={
+            <button type="button" className="secondary-button"
+              disabled={pending || savedIds.includes(match.job.id)}
+              aria-label={savedIds.includes(match.job.id) ? `${match.job.title} saved` : `Save ${match.job.title} at ${match.job.company} to shortlist`}
+              onClick={() => void send(`Save job #${match.job.id} (${match.job.title} at ${match.job.company}) to my shortlist.`)}>
+              <Icon name="bookmark" size={16} />{savedIds.includes(match.job.id) ? "Saved" : "Shortlist"}
+            </button>
+          } />
+        ))}
+      </div>
+      {remaining > 0 && (
+        <button type="button" className="secondary-button" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>
+          {showAll ? "Show fewer matches" : `Show ${remaining} more ${remaining === 1 ? "match" : "matches"}`}
+        </button>
+      )}
+    </section>
+  );
+}
+
 export default function AgentChat() {
-  const { messages, pending, error, savedIds, send } = useCareerChat();
+  const { messages, pending, error, send, clearConversation } = useCareerChat();
   const [input, setInput] = useState("");
+  const [showPrompts, setShowPrompts] = useState(false);
   const turnRef = useRef<HTMLDivElement>(null);
-  const submit = () => {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const promptPanelRef = useRef<HTMLDivElement>(null);
+  const promptToggleRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (showPrompts) promptPanelRef.current?.querySelector("button")?.focus({ preventScroll: true });
+  }, [showPrompts]);
+
+  function submit() {
     if (!input.trim() || pending) return;
     void send(input);
     setInput("");
-  };
+    setShowPrompts(false);
+  }
 
   useEffect(() => {
     if (!messages.length) return;
@@ -68,65 +125,85 @@ export default function AgentChat() {
   }, [messages, pending, error]);
 
   return (
-    <section className="chat-page">
-      <header className="chat-header">
-        <h1>Job Search Chat</h1>
-        <span className="assistant-label"><Icon name="spark" size={15} /> Career assistant</span>
-      </header>
+    <section className="chat-page" data-empty={messages.length === 0}>
+      <PageHeading title="Job Search Chat" icon="chat"
+        description="Find eligible roles, compare your skills, and build your shortlist."
+        action={messages.length > 0 && (
+          <button type="button" className="secondary-button new-chat" disabled={pending} onClick={() => {
+            if (!window.confirm("Start a new chat? This will clear this conversation.")) return;
+            clearConversation();
+            setInput("");
+            setShowPrompts(false);
+            inputRef.current?.focus();
+          }}><Icon name="plus" size={16} /> New chat</button>
+        )}
+      />
 
       {messages.length === 0 ? (
-        <div className="chat-welcome">
-          <div className="orb" aria-hidden="true"><Icon name="spark" size={38} /></div>
-          <h2>Find your next role.</h2>
-          <p>Discover jobs you’re eligible for, see how your skills match, and save the roles you want to revisit.</p>
-          <div className="prompts">
-            {prompts.map((prompt) => (
-              <button key={prompt.title} type="button" className="surface prompt" onClick={() => void send(prompt.text)}>
-                <span className="tile-icon"><Icon name={prompt.icon} size={18} /></span>
-                <span className="prompt-copy"><strong>{prompt.title}</strong><span>{prompt.detail}</span></span>
-                <Icon name="arrow" size={16} />
-              </button>
-            ))}
+        <div className="surface chat-welcome">
+          <div className="welcome-copy">
+            <div className="orb" aria-hidden="true"><Icon name="spark" size={29} /></div>
+            <h2>Find your next role.</h2>
+            <p>Start with a suggested search or ask in your own words.</p>
           </div>
+          <PromptChoices onChoose={(text) => void send(text)} />
         </div>
       ) : (
         <div className="transcript" role="log" aria-label="Conversation">
           {messages.map((message, index) => {
             const steps = message.steps ?? [];
             const matches = jobMatches(steps);
+            const longResultReply = matches.length > 0 &&
+              (message.text.length > 320 || message.text.split("\n").length > 5);
             return (
               <div className={`message message-${message.role}`} key={index}
                 ref={index === messages.length - 1 ? turnRef : undefined}>
                 <p className="message-author">{message.role === "user" ? "You" : "CareerMatch"}</p>
-                <p className="message-text">{message.text}</p>
-                {steps.length > 0 && <Activity steps={steps} />}
-                {matches.length > 0 && (
-                  <div className="job-grid">
-                    {matches.map((match) => (
-                      <JobCard key={match.job.id} job={match.job} score={match.score} skills={match} action={
-                        <button type="button" className="secondary-button"
-                          disabled={pending || savedIds.includes(match.job.id)}
-                          aria-label={savedIds.includes(match.job.id) ? `${match.job.title} saved` : `Save ${match.job.title} at ${match.job.company} to shortlist`}
-                          onClick={() => void send(`Save job #${match.job.id} (${match.job.title} at ${match.job.company}) to my shortlist.`)}>
-                          <Icon name="bookmark" size={16} />{savedIds.includes(match.job.id) ? "Saved" : "Shortlist"}
-                        </button>
-                      } />
-                    ))}
+                {!longResultReply && <p className="message-text">{message.text}</p>}
+                {(longResultReply || steps.length > 0) && (
+                  <div className="message-tools">
+                    {longResultReply && (
+                      <details className="reply-details surface">
+                        <summary>Read assistant reply</summary>
+                        <p className="reply-text">{message.text}</p>
+                      </details>
+                    )}
+                    {steps.length > 0 && <Activity steps={steps} />}
                   </div>
                 )}
+                {matches.length > 0 && <MatchResults matches={matches} />}
               </div>
             );
           })}
         </div>
       )}
 
-      <div className="composer-wrap">
+      <div className="composer-wrap" onKeyDown={(event) => {
+        if (event.key === "Escape" && showPrompts) {
+          setShowPrompts(false);
+          promptToggleRef.current?.focus();
+        }
+      }}>
+        {showPrompts && (
+          <div id="composer-prompts" ref={promptPanelRef} className="surface composer-prompts">
+            <PromptChoices onChoose={(text) => {
+              setInput(text);
+              setShowPrompts(false);
+              inputRef.current?.focus();
+            }} />
+          </div>
+        )}
         {pending && <p className="chat-status" role="status"><span className="status-dot" /> CareerMatch is working…</p>}
         {error && <p className="chat-status error" role="alert">{error}</p>}
         <form className="composer glass" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-          <Icon name="spark" size={22} />
+          {messages.length > 0 ? (
+            <button type="button" ref={promptToggleRef} className="menu-action prompt-toggle" aria-label="Suggested prompts" aria-expanded={showPrompts}
+              aria-controls={showPrompts ? "composer-prompts" : undefined} onClick={() => setShowPrompts(!showPrompts)}>
+              <Icon name="spark" size={19} />
+            </button>
+          ) : <span className="composer-icon"><Icon name="spark" size={21} /></span>}
           <label className="sr-only" htmlFor="message">Message CareerMatch</label>
-          <textarea id="message" rows={1} maxLength={4000} placeholder="Ask about jobs, skills, or your shortlist…"
+          <textarea id="message" ref={inputRef} rows={1} maxLength={4000} placeholder="Ask about jobs, skills, or your shortlist…"
             value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();

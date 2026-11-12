@@ -1,12 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { agentRequestSchema } from "@/lib/schemas";
 import { runAgent } from "@/lib/agent/runAgent";
+import { getIdentity } from "@/lib/account-session";
+import { findProfile } from "@/lib/careermatch";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /** POST /api/agent  body: { messages: [{ role: "user" | "model", text: string }] } */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const identity = await getIdentity(request);
+  if (!identity) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const parsed = agentRequestSchema.safeParse(body);
   if (!parsed.success) {
@@ -14,7 +18,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runAgent(parsed.data.messages);
+    if (identity.canEdit && !await findProfile(identity.profileId)) {
+      return NextResponse.json({ error: "Add your academic details on My Profile before searching." }, { status: 409 });
+    }
+    const result = await runAgent(parsed.data.messages, identity.profileId);
     return NextResponse.json({
       ...result,
       steps: result.steps.map((step) => ({

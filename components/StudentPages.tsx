@@ -6,6 +6,8 @@ import type { Profile, SavedJob } from "@/lib/careermatch-types";
 import { useCareerChat } from "./ChatProvider";
 import { Icon } from "./Icon";
 import { JobCard, SkillList } from "./JobCard";
+import { PageHeading } from "./PageHeading";
+import { ProfileEditor } from "./ProfileEditor";
 
 type Resource<T> = { data: T; error?: never } | { error: string; data?: never };
 
@@ -57,16 +59,27 @@ function PageState({ error, retry, label }: { error?: string; retry: () => void;
 
 export function ProfilePage() {
   const { profileRevision } = useCareerChat();
-  const { result, retry } = useStudentResource<Profile>("/api/profile", profileRevision);
-  const profile = result?.data;
+  const { result, retry } = useStudentResource<({ canEdit: boolean } & Profile) | { canEdit: true }>("/api/profile", profileRevision);
+  const data = result?.data;
+  const profile = data && "id" in data ? data : undefined;
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   return (
     <section className="data-page">
-      <header className="page-heading">
-        <h1>My Profile</h1>
-        <p>The academic details and skills CareerMatch uses to find eligible roles.</p>
-      </header>
-      {!profile ? <PageState error={result?.error} retry={retry} label="Loading your profile…" /> : (
+      <PageHeading title="My Profile" icon="user"
+        description="The academic details and skills CareerMatch uses to find eligible roles."
+        action={profile?.canEdit && !editing && (
+          <button type="button" className="secondary-button" onClick={() => { setEditing(true); setSaved(false); }}>Edit details</button>
+        )} />
+      {saved && <p className="profile-saved" role="status">Profile saved.</p>}
+      {data?.canEdit && (editing || !profile) ? (
+        <ProfileEditor profile={profile} onCancel={() => setEditing(false)} onSaved={() => {
+          setEditing(false);
+          setSaved(true);
+          retry();
+        }} />
+      ) : !profile ? <PageState error={result?.error} retry={retry} label="Loading your profile…" /> : (
         <>
           <div className="surface identity">
             <span className="profile-avatar" aria-hidden="true">
@@ -82,7 +95,7 @@ export function ProfilePage() {
             <section className="surface data-card">
               <h2>Academic details</h2>
               <dl className="facts">
-                <div><dt>Student ID</dt><dd>{profile.id}</dd></div>
+                {!profile.canEdit && <div><dt>Student ID</dt><dd>{profile.id}</dd></div>}
                 <div><dt>CGPA</dt><dd>{profile.cgpa.toFixed(1)} / 10</dd></div>
                 <div><dt>Graduation year</dt><dd>{profile.grad_year}</dd></div>
               </dl>
@@ -107,10 +120,8 @@ export function ShortlistPage() {
 
   return (
     <section className="data-page">
-      <header className="page-heading">
-        <h1>My Shortlist</h1>
-        <p>Revisit saved roles and keep track of their application deadlines.</p>
-      </header>
+      <PageHeading title="My Shortlist" icon="bookmark"
+        description="Revisit saved roles and keep track of application deadlines." />
       {!jobs ? <PageState error={result?.error} retry={retry} label="Loading your shortlist…" /> :
         jobs.length === 0 ? (
           <div className="surface page-state empty-state">

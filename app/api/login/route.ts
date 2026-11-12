@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { SESSION_COOKIE, hashPasscode } from "@/lib/auth";
 
+import { ACCOUNT_COOKIE } from "@/lib/account-session";
+
 const loginSchema = z.object({ passcode: z.string().min(1).max(100) });
 
 export async function POST(request: Request) {
@@ -14,6 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Wrong passcode." }, { status: 401 });
   }
   const response = NextResponse.json({ ok: true });
+  response.cookies.delete(ACCOUNT_COOKIE);
   response.cookies.set(SESSION_COOKIE, await hashPasscode(expected), {
     httpOnly: true,
     sameSite: "lax",

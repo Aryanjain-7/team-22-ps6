@@ -1,12 +1,66 @@
-# CareerMatch · Job Match Agent
+# CareerMatch: Job Match Agent
 
-Team 22 · SRM Agentic AI Hackathon · PS6
+Team 22 | PS6 | SRM Agentic AI Hackathon
 
-CareerMatch helps the seeded student discover eligible roles, compare required skills, and save jobs to a shortlist. The workspace includes Job Search Chat, My Profile, and My Shortlist.
+## The problem
 
-## Run locally
+Final-year students spend time reviewing jobs before they know whether they meet the branch, CGPA, and deadline requirements. They also need a way to compare their skills with each eligible listing.
 
-Use Node.js 22 or newer, the Supabase CLI, and the PostgreSQL `psql` client. The local database runs separately from any hosted project.
+## What our app does
+
+My Profile shows the academic details and skills used for matching. Job Search Chat finds eligible roles, ranks them by required-skill coverage, and shows what Gemini actually did. My Shortlist shows saved jobs and deadlines. The app uses the official PS6 seed and fictional student details.
+
+The team passcode opens the seeded student demo. A teammate can also use the passcode to create an individual account with a fictional username, sign in with a password, and enter fictional details under My Profile. Supabase Auth issues the JWT, which the app keeps in an HTTP-only cookie. Individual profiles and shortlists are separate from the demo student and from other accounts.
+
+## Live demo
+
+- [Open CareerMatch on Vercel](https://careermatch-team-22.vercel.app)
+- [Team 22 repository](https://github.com/sayanbasu2006/team-22-ps6)
+- [Five-slide submission PDF](output/pdf/CareerMatch-Team-22.pdf)
+- Team passcode: the team lead provides it privately in the submission form.
+
+Start in **Team demo** mode. Open **My Profile**, then ask “Find eligible data analyst jobs in Chennai and save the top match.” Expand **Agent activity** to show Gemini’s tool choices. Open **My Shortlist** to show the persisted row. A repeat save reports the existing entry. Ask “Can you find that one for me?” in a new chat to demonstrate how the assistant handles an unclear request.
+
+## Agent tools
+
+| Tool | Operation | What it does |
+|---|---|---|
+| `getMyProfile` | Read | Loads the signed-in student's profile and skills. |
+| `searchJobs` | Read | Filters by CGPA, branch, deadline, and requested criteria, then ranks eligible roles. |
+| `scoreJobMatch` | Read | Calculates the share of required skills the student already has and lists the missing skills. |
+| `saveToShortlist` | Write | Rechecks eligibility and saves the job once per student. |
+| `updateMySkills` | Write | Adds a skill to the signed-in profile without dropping existing skills. |
+
+Gemini chooses which tool to call. Zod validates the arguments on the server. Eligibility includes jobs whose deadline is today in India. Supabase ranks jobs before limiting results, and a database constraint prevents duplicate shortlist entries.
+
+## Database tables
+
+- `profiles` stores the seeded students and fictional details entered by individual accounts.
+- `jobs` stores official fictional listings, skill requirements, and eligibility rules.
+- `shortlists` links a student to each saved role.
+- Supabase Auth manages individual account credentials separately from student profiles.
+
+## Tech stack
+
+[Official SRM starter](https://github.com/learn2simple/srm-agent-hackathon-starter), Next.js App Router, React, TypeScript, Tailwind CSS, Zod, Supabase PostgreSQL and Auth, Google Gemini function calling, GitHub, and Vercel.
+
+Production uses `gemini-3.5-flash-lite`, the alternate model approved by the trainer for Team 22. If the team exhausts Gemini quota, contact the mentor.
+
+## Team members and proposed responsibilities
+
+| Member | Proposed responsibility |
+|---|---|
+| Amar Banik | Team lead, deployment, testing, and demo |
+| Akarsh Jaiswal | Frontend and UI/UX |
+| Aryan Rahul Jain | Backend APIs and validation |
+| Jatin Gupta | Supabase and seed data |
+| Sayan Basu | Gemini agent and tool workflow |
+
+Each teammate should make a genuine contribution using their own Git identity and rehearse the full workflow before judging.
+
+## Run it locally
+
+Use Node.js 22 or newer, the Supabase CLI, and the PostgreSQL `psql` client. The local database runs separately from the hosted project.
 
 ```sh
 npm ci
@@ -15,30 +69,12 @@ npm run db:local
 npm run dev -- --webpack --hostname 127.0.0.1
 ```
 
-The native Supabase runtime supports Apple silicon and Linux. With a Docker-compatible runtime, use `supabase start --runtime docker` instead. If the CLI is installed outside your path, set `SUPABASE_BIN` to its executable when running `npm run db:local`.
+The native Supabase runtime supports Apple silicon and Linux. With a Docker-compatible runtime, use `supabase start --runtime docker`. If the CLI is outside your path, set `SUPABASE_BIN` to its executable for `npm run db:local`.
 
-The database setup applies the official seed to a fresh local project and configures `.env.local`. Add a Google AI Studio key to `GEMINI_API_KEY` in that file and use the trainer-approved `GEMINI_MODEL`. Open [localhost:3000](http://localhost:3000) and sign in using the local `APP_PASSCODE` value. `/api/health` lists which settings are configured.
+The setup script applies the official seed to a fresh local database and configures `.env.local`. Set your team's `GEMINI_API_KEY` and trainer-approved `GEMINI_MODEL` in that file. Open [localhost:3000](http://localhost:3000) and use the local `APP_PASSCODE`. Run `npm run typecheck` and `npm run build` before pushing.
 
-## Prepare a hosted deployment
+## Hosted setup
 
-1. Create a dedicated Supabase project in Mumbai. Enable its Data API.
-2. Run `node scripts/database-sql.mjs > careermatch-bootstrap.sql` and apply the generated SQL in the fresh project's SQL Editor. The bootstrap aborts if an application table already exists. For a database already seeded with the starter and PS6 files, review and apply `supabase/production.sql` instead.
-3. Import this repository into Vercel. Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and a separate strong `APP_PASSCODE` in the production environment. Keep the API keys and passcode in Vercel's secret fields.
-4. Run the checks below, deploy, then sign in and run the demo. Use your own team passcode. `.env.local` stays outside Git.
+On a fresh Supabase project in Mumbai, enable the Data API and apply the SQL generated by `npm run --silent db:sql`. The bootstrap stops if app tables already exist. On a database with the starter and PS6 seed already installed, apply the additive SQL in `supabase/production.sql`.
 
-The hackathon workspace uses one shared student profile. The database ranks and limits search results before returning them to the app, so Supabase's row cap does not truncate the candidate set.
-## Demo
-
-- Open My Profile to view the current skills, branch, and CGPA for S001.
-- Ask “Find eligible jobs in Chennai and save the top three.” Expand Agent activity to see the real tool calls, then open My Shortlist to verify the saved rows.
-- Ask “Which skills am I missing for data analyst roles?” Compare the matched and missing skills on each result.
-- Ask “Add Docker to my profile and search again.” Open My Profile to verify the saved skill. Only required skills affect the score, so adding a skill may leave some scores unchanged.
-
-Gemini selects from five Zod-validated tools. Profile reads, searches, and scoring use Supabase data. `saveToShortlist` rechecks CGPA, branch, and the India-time deadline and uses the unique student/job key to prevent duplicates. `updateMySkills` preserves existing skills and uses a conditional update to avoid lost writes. Eligibility includes jobs whose deadline is today. The score is the rounded percentage of required skills that match the profile.
-
-## Checks
-
-```sh
-npm run typecheck
-npm run build
-```
+Connect the repository to Vercel and set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `APP_PASSCODE` in the production environment. Keep credentials in server environment variables and out of Git.

@@ -85,3 +85,8 @@ revoke all on function public.careermatch_search(text, date, text, text, text, t
 grant execute on function public.careermatch_search(text, date, text, text, text, text)
   to service_role;
 notify pgrst, 'reload schema';
+
+-- Individual demo accounts write profiles under the UUID verified by Supabase Auth.
+grant insert on public.profiles to service_role;
+grant update (id, name, degree, branch, grad_year, cgpa, preferred_cities, skills, interests)
+  on public.profiles to service_role;

@@ -3,8 +3,8 @@ import { ThinkingLevel, type Content, type Part } from "@google/genai";
 import { getGemini } from "../gemini";
 import { GEMINI_MODEL } from "../env";
 import type { ChatMessage } from "../schemas";
-import { tools } from "./tools";
-import { toFunctionDeclarations } from "./defineTool";
+import { toolsForProfile } from "./tools";
+import { toFunctionDeclarations, type AgentTool } from "./defineTool";
 import { buildSystemPrompt } from "./systemPrompt";
 import type { AgentResult, AgentStep } from "./types";
 
@@ -19,9 +19,10 @@ const AGENT_DEADLINE_MS = 45_000;
  * 3. Send the results back to Gemini.
  * 4. Repeat until Gemini gives a final text answer (or MAX_ROUNDS is reached).
  */
-export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
+export async function runAgent(messages: ChatMessage[], profileId: string): Promise<AgentResult> {
   const ai = getGemini();
   const steps: AgentStep[] = [];
+  const tools = toolsForProfile(profileId);
   const functionDeclarations = toFunctionDeclarations(tools);
   const deadline = AbortSignal.timeout(AGENT_DEADLINE_MS);
 
@@ -71,7 +72,7 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
       if (deadline.aborted) {
         return { reply: "This request timed out. Check Agent activity for completed operations.", steps };
       }
-      const step = await runTool(call.name ?? "", call.args ?? {});
+      const step = await runTool(tools, call.name ?? "", call.args ?? {});
       steps.push(step);
       responseParts.push({
         functionResponse: {
@@ -90,7 +91,7 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
   };
 }
 
-async function runTool(name: string, rawArgs: unknown): Promise<AgentStep> {
+async function runTool(tools: AgentTool[], name: string, rawArgs: unknown): Promise<AgentStep> {
   const tool = tools.find((t) => t.name === name);
   if (!tool) {
     return { tool: name, args: rawArgs, ok: false, writes: false, error: `Unknown tool: ${name}` };
