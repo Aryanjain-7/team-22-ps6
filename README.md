@@ -34,7 +34,7 @@ Expand **Agent activity** to see Gemini’s tool choices. Open **My Shortlist** 
 | `getMyProfile` | Read | Loads the signed-in student's profile and skills. |
 | `searchJobs` | Read | Filters by CGPA, branch, deadline, and requested criteria, then ranks eligible roles. |
 | `scoreJobMatch` | Read | Calculates the share of required skills the student already has and lists the missing skills. |
-| `getShortlistedJob` | Read | Verifies that the job is saved and eligible, then returns listing and skill match data for a cover note draft. |
+| `draftCoverNote` | Read | Verifies that the job is saved and eligible, then drafts a note from the listing and matched skills. |
 | `saveToShortlist` | Write | Rechecks eligibility and saves the job once per student. |
 | `updateMySkills` | Write | Adds a skill to the signed-in profile without dropping existing skills. |
 

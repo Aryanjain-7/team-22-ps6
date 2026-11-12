@@ -31,10 +31,16 @@ export function toolsForProfile(profileId: string): AgentTool[] {
       run: ({ jobId }) => scoreEligibleJob(profileId, jobId),
     }),
     defineTool({
-      name: "getShortlistedJob",
-      description: "Use before drafting a cover note. Verifies that the job is eligible and saved by the current student, then returns the listing and verified skill match.",
+      name: "draftCoverNote",
+      description: "Use only when asked to draft a cover note for a specific job. Checks the current student's shortlist and eligibility, then prepares a note from the listing and verified skills.",
       schema: z.object({ jobId }),
-      run: ({ jobId }) => readShortlistedJobMatch(profileId, jobId),
+      run: async ({ jobId }) => {
+        const { job, matched } = await readShortlistedJobMatch(profileId, jobId);
+        const skillLine = matched.length
+          ? `My skills include ${new Intl.ListFormat("en").format(matched)}, which are listed among the requirements for this role.`
+          : "I would welcome the opportunity to learn more about the role and its skill requirements.";
+        return `Dear Hiring Team at ${job.company},\n\nI’m interested in the ${job.title} position. ${skillLine}\n\nThank you for considering my application. I’d welcome the opportunity to discuss the role.\n\nBest regards,\n[Your name]`;
+      },
     }),
     defineTool({
       name: "saveToShortlist",

@@ -43,7 +43,7 @@ export const toolNames = {
   getMyProfile: "Read student profile",
   searchJobs: "Searched eligible jobs",
   scoreJobMatch: "Compared required skills",
-  getShortlistedJob: "Checked shortlisted job",
+  draftCoverNote: "Checked shortlisted job",
   saveToShortlist: "Updated shortlist",
   updateMySkills: "Updated profile skills",
 } as const;

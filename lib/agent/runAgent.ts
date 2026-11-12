@@ -74,6 +74,11 @@ export async function runAgent(messages: ChatMessage[], profileId: string): Prom
       }
       const step = await runTool(tools, call.name ?? "", call.args ?? {});
       steps.push(step);
+      if (step.tool === "draftCoverNote" && !step.error?.startsWith("Invalid arguments:")) {
+        const reply = step.ok && typeof step.result === "string" ? step.result
+          : step.error ?? "Could not draft a cover note for this job.";
+        return { reply, steps };
+      }
       responseParts.push({
         functionResponse: {
           id: call.id,
