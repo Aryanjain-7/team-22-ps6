@@ -37,7 +37,17 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
         tools: [{ functionDeclarations }],
         temperature: 0.2,
       },
+    }).catch((error: unknown) => {
+      if (!steps.length) throw error;
+      return null;
     });
+
+    if (!response) {
+      return {
+        reply: "Gemini could not finish its reply. Check Agent activity for completed operations.",
+        steps,
+      };
+    }
 
     const calls = response.functionCalls ?? [];
 

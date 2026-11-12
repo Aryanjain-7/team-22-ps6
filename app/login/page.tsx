@@ -1,50 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { Icon } from "@/components/Icon";
 
 export default function LoginPage() {
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pending, setPending] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
     setError("");
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passcode }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      window.location.href = "/";
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Login failed");
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode }),
+      });
+      if (response.ok) {
+        window.location.assign("/");
+        return;
+      }
+      const data = await response.json();
+      setError(data.error ?? "Login failed. Try again.");
+    } catch {
+      setError("Could not reach CareerMatch. Try again.");
+    } finally {
+      setPending(false);
     }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-lg font-semibold">Enter team passcode</h1>
-        <p className="mt-1 text-sm text-slate-500">This keeps your app and your Gemini quota safe.</p>
-        <input
-          type="password"
-          value={passcode}
-          onChange={(e) => setPasscode(e.target.value)}
-          className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-slate-500"
-          placeholder="Passcode"
-          autoFocus
-        />
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading || !passcode}
-          className="mt-4 w-full rounded-lg bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-        >
-          {loading ? "Checking..." : "Enter"}
+    <main className="login-page">
+      <form className="surface login-card" onSubmit={handleSubmit}>
+        <div className="brand">
+          <span className="brand-mark"><Icon name="spark" size={19} /></span>
+          <span>Career<span className="brand-accent">Match</span></span>
+        </div>
+        <h1>Welcome to CareerMatch</h1>
+        <p className="muted">Enter your team passcode to open the workspace.</p>
+        <label htmlFor="passcode">Team passcode</label>
+        <input id="passcode" type="password" value={passcode} autoComplete="current-password"
+          onChange={(event) => setPasscode(event.target.value)} required />
+        {error && <p className="error" role="alert">{error}</p>}
+        <button className="primary-button" type="submit" disabled={pending || !passcode}>
+          {pending ? "Signing in…" : "Sign in"}<Icon name="arrow" size={17} />
         </button>
       </form>
     </main>

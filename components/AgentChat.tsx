@@ -1,145 +1,143 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { AgentResult, AgentStep } from "@/lib/agent/types";
+import type { AgentStep } from "@/lib/agent/types";
+import { toolNames, type JobMatch } from "@/lib/careermatch-types";
+import { useCareerChat } from "./ChatProvider";
+import { Icon, type IconName } from "./Icon";
+import { JobCard } from "./JobCard";
 
-type Message = { role: "user" | "model"; text: string; steps?: AgentStep[] };
-
-// YOUR JOB: change these sample prompts to match your problem statement.
-const SAMPLE_PROMPTS = [
-  "Add a task to call the vendor tomorrow, then show all my tasks.",
-  "Which tasks are still open?",
-  "Mark the vendor call task as done.",
+const prompts: { title: string; detail: string; text: string; icon: IconName }[] = [
+  { title: "Find jobs in Chennai", detail: "Rank roles by my skills", text: "Find eligible jobs in Chennai and rank them by how well my skills match.", icon: "pin" },
+  { title: "Explore skill gaps", detail: "Compare data analyst roles", text: "Which skills am I missing for eligible data analyst roles?", icon: "layers" },
+  { title: "Find remote work", detail: "Explore eligible remote roles", text: "Show me remote jobs I’m eligible for and explain the best matches.", icon: "briefcase" },
 ];
 
-export default function AgentChat({ onDataChanged }: { onDataChanged?: () => void }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
-
-  async function send(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || loading) return;
-    const next: Message[] = [...messages, { role: "user", text: trimmed }];
-    setMessages(next);
-    setInput("");
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // Only the last 20 messages are sent, to keep requests small.
-        body: JSON.stringify({ messages: next.slice(-20).map(({ role, text }) => ({ role, text })) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Request failed");
-      const result = data as AgentResult;
-      setMessages([...next, { role: "model", text: result.reply, steps: result.steps }]);
-      if (result.steps.some((s) => s.writes && s.ok)) onDataChanged?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
+function jobMatches(steps: AgentStep[]) {
+  const matches = new Map<number, JobMatch>();
+  for (const step of steps) {
+    if (!step.ok || !step.result) continue;
+    const results = step.tool === "searchJobs" ? (step.result as { matches: JobMatch[] }).matches :
+      step.tool === "scoreJobMatch" ? [step.result as JobMatch] : [];
+    for (const match of results) matches.set(match.job.id, match);
   }
+  return [...matches.values()].sort((first, second) => second.score - first.score ||
+    first.job.apply_by.localeCompare(second.job.apply_by) || first.job.id - second.job.id);
+}
 
+function Activity({ steps }: { steps: AgentStep[] }) {
   return (
-    <div className="flex h-[70vh] flex-col rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-4 py-3">
-        <h2 className="font-semibold">Agent</h2>
-        <p className="text-xs text-slate-500">Ask in plain English. You can see every tool the agent uses.</p>
-      </div>
-
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.length === 0 && (
-          <div className="space-y-2">
-            <p className="text-sm text-slate-500">Try one of these:</p>
-            {SAMPLE_PROMPTS.map((p) => (
-              <button
-                key={p}
-                onClick={() => send(p)}
-                className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:bg-slate-50"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            <div
-              className={
-                m.role === "user"
-                  ? "max-w-[85%] rounded-2xl bg-slate-900 px-3 py-2 text-sm text-white"
-                  : "max-w-[85%] space-y-2"
-              }
-            >
-              {m.steps && m.steps.length > 0 && <ToolSteps steps={m.steps} />}
-              {m.role === "model" ? (
-                <div className="whitespace-pre-wrap rounded-2xl bg-slate-100 px-3 py-2 text-sm">{m.text}</div>
-              ) : (
-                m.text
-              )}
-            </div>
-          </div>
-        ))}
-
-        {loading && <p className="text-sm text-slate-500">Agent is working...</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div ref={bottomRef} />
-      </div>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(input);
-        }}
-        className="flex gap-2 border-t border-slate-200 p-3"
-      >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your request..."
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          Send
-        </button>
-      </form>
-    </div>
+    <details className="activity glass">
+      <summary><Icon name="activity" size={17} />Agent activity <span>{steps.length} {steps.length === 1 ? "step" : "steps"}</span></summary>
+      <ol>
+        {steps.map((step, index) => {
+          const outcomes = step.tool === "saveToShortlist" && step.ok
+            ? (step.result as { outcomes: { saved: boolean; match?: { added: boolean } }[] }).outcomes : null;
+          const added = outcomes?.filter((outcome) => outcome.match?.added).length ?? 0;
+          const existing = outcomes?.filter((outcome) => outcome.saved && !outcome.match?.added).length ?? 0;
+          const failed = outcomes?.filter((outcome) => !outcome.saved).length ?? 0;
+          return (
+            <li key={index}>
+              <span>{toolNames[step.tool as keyof typeof toolNames] ?? "Tool call"}</span>
+              <span className="muted">{outcomes ? [
+                added ? `${added} saved` : "",
+                existing ? `${existing} already saved` : "",
+                failed ? `${failed} failed` : "",
+              ].filter(Boolean).join(" · ") : step.ok ? "Completed" : "Failed"}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </details>
   );
 }
 
-/** Shows each tool call so users (and judges) can see what the agent did. */
-function ToolSteps({ steps }: { steps: AgentStep[] }) {
+export default function AgentChat() {
+  const { messages, pending, error, savedIds, send } = useCareerChat();
+  const [input, setInput] = useState("");
+  const turnRef = useRef<HTMLDivElement>(null);
+  const submit = () => {
+    if (!input.trim() || pending) return;
+    void send(input);
+    setInput("");
+  };
+
+  useEffect(() => {
+    if (!messages.length) return;
+    turnRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [messages, pending, error]);
+
   return (
-    <div className="space-y-1">
-      {steps.map((s, i) => (
-        <details key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs">
-          <summary className="cursor-pointer select-none">
-            <span className={s.ok ? "text-emerald-700" : "text-red-600"}>{s.ok ? "Done" : "Failed"}</span>
-            {" · "}
-            <span className="font-mono font-medium">{s.tool}</span>
-            {s.writes && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">writes data</span>}
-          </summary>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap text-slate-600">
-            {JSON.stringify({ args: s.args, ...(s.ok ? { result: s.result } : { error: s.error }) }, null, 2)}
-          </pre>
-        </details>
-      ))}
-    </div>
+    <section className="chat-page">
+      <header className="chat-header">
+        <h1>Job Search Chat</h1>
+        <span className="assistant-label"><Icon name="spark" size={15} /> Career assistant</span>
+      </header>
+
+      {messages.length === 0 ? (
+        <div className="chat-welcome">
+          <div className="orb" aria-hidden="true"><Icon name="spark" size={38} /></div>
+          <h2>Find your next role.</h2>
+          <p>Discover jobs you’re eligible for, see how your skills match, and save the roles you want to revisit.</p>
+          <div className="prompts">
+            {prompts.map((prompt) => (
+              <button key={prompt.title} type="button" className="surface prompt" onClick={() => void send(prompt.text)}>
+                <span className="tile-icon"><Icon name={prompt.icon} size={18} /></span>
+                <span className="prompt-copy"><strong>{prompt.title}</strong><span>{prompt.detail}</span></span>
+                <Icon name="arrow" size={16} />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="transcript" role="log" aria-label="Conversation">
+          {messages.map((message, index) => {
+            const steps = message.steps ?? [];
+            const matches = jobMatches(steps);
+            return (
+              <div className={`message message-${message.role}`} key={index}
+                ref={index === messages.length - 1 ? turnRef : undefined}>
+                <p className="message-author">{message.role === "user" ? "You" : "CareerMatch"}</p>
+                <p className="message-text">{message.text}</p>
+                {steps.length > 0 && <Activity steps={steps} />}
+                {matches.length > 0 && (
+                  <div className="job-grid">
+                    {matches.map((match) => (
+                      <JobCard key={match.job.id} job={match.job} score={match.score} skills={match} action={
+                        <button type="button" className="secondary-button"
+                          disabled={pending || savedIds.includes(match.job.id)}
+                          aria-label={savedIds.includes(match.job.id) ? `${match.job.title} saved` : `Save ${match.job.title} at ${match.job.company} to shortlist`}
+                          onClick={() => void send(`Save job #${match.job.id} (${match.job.title} at ${match.job.company}) to my shortlist.`)}>
+                          <Icon name="bookmark" size={16} />{savedIds.includes(match.job.id) ? "Saved" : "Shortlist"}
+                        </button>
+                      } />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="composer-wrap">
+        {pending && <p className="chat-status" role="status"><span className="status-dot" /> CareerMatch is working…</p>}
+        {error && <p className="chat-status error" role="alert">{error}</p>}
+        <form className="composer glass" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+          <Icon name="spark" size={22} />
+          <label className="sr-only" htmlFor="message">Message CareerMatch</label>
+          <textarea id="message" rows={1} maxLength={4000} placeholder="Ask about jobs, skills, or your shortlist…"
+            value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                submit();
+              }
+            }} />
+          <button className="send-button" type="submit" disabled={pending || !input.trim()} aria-label="Send message">
+            <Icon name="send" />
+          </button>
+        </form>
+      </div>
+    </section>
   );
 }

@@ -1,83 +1,62 @@
 import "server-only";
 import { z } from "zod";
 import { defineTool, type AgentTool } from "./defineTool";
-import { getSupabase } from "../supabase";
-import { isoDate } from "../schemas";
+import { addSkill, readProfile, saveEligibleJob, scoreEligibleJob, searchEligibleJobs } from "../careermatch";
 
-/*
- * EXAMPLE TOOLS for the starter "tasks" table (seed/00_starter_example.sql).
- * They show the pattern: 1 read tool + 2 write tools.
- *
- * YOUR JOB: replace these with tools for your problem statement.
- * Tips:
- *  - Write the description as "Use this when ..." so Gemini knows WHEN to call it.
- *  - Describe every field, including its format (for example YYYY-MM-DD).
- *  - Return small, clean objects. Gemini reads what you return.
- *  - Throw an Error with a clear message when something is wrong. The agent will explain it.
- */
+const jobId = z.number().int().positive().describe("Exact job ID from searchJobs.");
 
-const listTasks = defineTool({
-  name: "listTasks",
-  description:
-    "Use this when the user wants to see their tasks. Can filter by status. Returns at most 20 tasks, newest first.",
-  schema: z.object({
-    status: z
-      .enum(["open", "done", "all"])
-      .optional()
-      .describe("Which tasks to return. Default is all."),
+export const tools: AgentTool[] = [
+  defineTool({
+    name: "getMyProfile",
+    description: "Use this when you need the current student's stored profile, skills, or preferences.",
+    schema: z.object({}),
+    run: () => readProfile(),
   }),
-  run: async ({ status }) => {
-    let query = getSupabase()
-      .from("tasks")
-      .select("id, title, due_date, status")
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (status && status !== "all") query = query.eq("status", status);
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return { count: data.length, tasks: data };
-  },
-});
-
-const createTask = defineTool({
-  name: "createTask",
-  description: "Use this when the user asks to add, create or remember a new task.",
-  writes: true,
-  schema: z.object({
-    title: z.string().trim().min(1).max(200).describe("Short title of the task"),
-    due_date: isoDate.optional().describe("Due date in YYYY-MM-DD format, if the user gave one"),
+  defineTool({
+    name: "searchJobs",
+    description: "Use this to find eligible jobs. Returns matches ranked by required skill coverage, then earliest deadline. Use an empty filter for all jobs. Use a short role substring such as 'data analyst'.",
+    schema: z.object({
+      city: z.string().trim().min(1).max(80).optional().describe("Exact city, such as Chennai."),
+      role: z.string().trim().min(1).max(100).optional().describe("Optional role substring."),
+      workMode: z.enum(["Onsite", "Hybrid", "Remote"]).optional(),
+      jobType: z.enum(["Full-time", "Internship"]).optional(),
+    }),
+    run: async (filters) => {
+      const matches = await searchEligibleJobs(filters);
+      return { count: matches.length, matches: matches.slice(0, 12) };
+    },
   }),
-  run: async ({ title, due_date }) => {
-    const { data, error } = await getSupabase()
-      .from("tasks")
-      .insert({ title, due_date: due_date ?? null })
-      .select("id, title, due_date, status")
-      .single();
-    if (error) throw new Error(error.message);
-    return { created: data };
-  },
-});
-
-const completeTask = defineTool({
-  name: "completeTask",
-  description:
-    "Use this when the user says a task is finished. Needs the task id, so call listTasks first if you do not know it.",
-  writes: true,
-  schema: z.object({
-    id: z.number().int().positive().describe("The id of the task"),
+  defineTool({
+    name: "scoreJobMatch",
+    description: "Use this to explain the match and missing skills for a particular eligible job.",
+    schema: z.object({ jobId }),
+    run: ({ jobId }) => scoreEligibleJob(jobId),
   }),
-  run: async ({ id }) => {
-    const { data, error } = await getSupabase()
-      .from("tasks")
-      .update({ status: "done" })
-      .eq("id", id)
-      .select("id, title, status")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error(`No task found with id ${id}`);
-    return { updated: data };
-  },
-});
-
-/** Every tool in this list is given to Gemini. Add your own tools here. */
-export const tools: AgentTool[] = [listTasks, createTask, completeTask];
+  defineTool({
+    name: "saveToShortlist",
+    description: "Use this only when asked to save a job. Accepts up to ten exact job IDs from search or scoring. Each job is rechecked and an existing entry is reported separately.",
+    writes: true,
+    schema: z.object({ jobIds: z.array(jobId).min(1).max(10) }),
+    run: async ({ jobIds }) => {
+      const outcomes = [];
+      for (const id of new Set(jobIds)) {
+        try {
+          outcomes.push({ jobId: id, saved: true as const, match: await saveEligibleJob(id) });
+        } catch (error) {
+          outcomes.push({ jobId: id, saved: false as const, error: error instanceof Error ? error.message : "Could not save this job." });
+        }
+      }
+      return { outcomes };
+    },
+  }),
+  defineTool({
+    name: "updateMySkills",
+    description: "Use this only when asked to add a skill to the student's profile. Existing skills are preserved.",
+    writes: true,
+    schema: z.object({
+      skill: z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N}][\p{L}\p{N} .+#&/()-]*$/u)
+        .describe("One skill, for example Docker or C++."),
+    }),
+    run: ({ skill }) => addSkill(skill),
+  }),
+];

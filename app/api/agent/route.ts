@@ -15,7 +15,15 @@ export async function POST(request: Request) {
 
   try {
     const result = await runAgent(parsed.data.messages);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      steps: result.steps.map((step) => ({
+        tool: step.tool, ok: step.ok, writes: step.writes,
+        args: {},
+        result: ["searchJobs", "scoreJobMatch", "saveToShortlist"].includes(step.tool) && step.ok
+          ? step.result : undefined,
+      })),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Agent failed";
     console.error("[agent]", message);
@@ -24,7 +32,9 @@ export async function POST(request: Request) {
       {
         error: quota
           ? "Gemini quota reached. Wait a minute and try again."
-          : message,
+          : /Missing environment variable/i.test(message)
+            ? "The job search agent has not been configured. Check the server settings."
+            : "CareerMatch could not complete this request. Try again shortly.",
       },
       { status: quota ? 429 : 500 }
     );
