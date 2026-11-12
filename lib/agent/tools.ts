@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { defineTool, type AgentTool } from "./defineTool";
-import { addSkill, readProfile, saveEligibleJob, scoreEligibleJob, searchEligibleJobs } from "../careermatch";
+import { addSkill, readProfile, readShortlistedJobMatch, saveEligibleJob, scoreEligibleJob, searchEligibleJobs } from "../careermatch";
 
 const jobId = z.number().int().positive().describe("Exact job ID from searchJobs.");
 
@@ -17,7 +17,7 @@ export function toolsForProfile(profileId: string): AgentTool[] {
       name: "searchJobs",
       description: "Use this to find eligible jobs. Returns matches ranked by required skill coverage, then earliest deadline. Use an empty filter for all jobs. Use a short role substring such as 'data analyst'.",
       schema: z.object({
-        city: z.string().trim().min(1).max(80).optional().describe("Exact city, such as Chennai."),
+        city: z.string().trim().min(1).max(80).optional().describe("Exact requested city. Omit it for a new request that does not name a city."),
         role: z.string().trim().min(1).max(100).optional().describe("Optional role substring."),
         workMode: z.enum(["Onsite", "Hybrid", "Remote"]).optional(),
         jobType: z.enum(["Full-time", "Internship"]).optional(),
@@ -31,6 +31,12 @@ export function toolsForProfile(profileId: string): AgentTool[] {
       run: ({ jobId }) => scoreEligibleJob(profileId, jobId),
     }),
     defineTool({
+      name: "getShortlistedJob",
+      description: "Use before drafting a cover note. Verifies that the job is eligible and saved by the current student, then returns the listing and verified skill match.",
+      schema: z.object({ jobId }),
+      run: ({ jobId }) => readShortlistedJobMatch(profileId, jobId),
+    }),
+    defineTool({
       name: "saveToShortlist",
       description: "Use this only when asked to save a job. Accepts up to ten exact job IDs from search or scoring. Each job is rechecked and an existing entry is reported separately.",
       writes: true,
@@ -39,9 +45,10 @@ export function toolsForProfile(profileId: string): AgentTool[] {
         const outcomes = [];
         for (const id of new Set(jobIds)) {
           try {
-            outcomes.push({ jobId: id, saved: true as const, match: await saveEligibleJob(profileId, id) });
+            const match = await saveEligibleJob(profileId, id);
+            outcomes.push({ jobId: id, saved: true as const, status: match.added ? "newly_saved" : "already_saved", match });
           } catch (error) {
-            outcomes.push({ jobId: id, saved: false as const, error: error instanceof Error ? error.message : "Could not save this job." });
+            outcomes.push({ jobId: id, saved: false as const, status: "failed", error: error instanceof Error ? error.message : "Could not save this job." });
           }
         }
         return { outcomes };
@@ -55,7 +62,10 @@ export function toolsForProfile(profileId: string): AgentTool[] {
         skill: z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N}][\p{L}\p{N} .+#&/()-]*$/u)
           .describe("One skill, for example Docker or C++."),
       }),
-      run: ({ skill }) => addSkill(profileId, skill),
+      run: async ({ skill }) => {
+        const result = await addSkill(profileId, skill);
+        return { ...result, status: result.added ? "newly_added" : "already_present" };
+      },
     }),
   ];
 }

@@ -83,6 +83,14 @@ export async function readShortlist(profileId: string): Promise<SavedJob[]> {
   return data;
 }
 
+export async function readShortlistedJobMatch(profileId: string, id: number) {
+  const { data, error } = await getSupabase().from("shortlists")
+    .select("job_id").eq("profile_id", profileId).eq("job_id", id).maybeSingle();
+  if (error) throw new Error("Could not check your shortlist.");
+  if (!data) throw new Error("That job is not on your shortlist.");
+  return scoreEligibleJob(profileId, id);
+}
+
 export async function saveEligibleJob(profileId: string, id: number) {
   const match = await scoreEligibleJob(profileId, id);
   const { data, error } = await getSupabase().from("shortlists")

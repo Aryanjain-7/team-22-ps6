@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Profile, SavedJob } from "@/lib/careermatch-types";
 import { useCareerChat } from "./ChatProvider";
@@ -114,7 +115,8 @@ export function ProfilePage() {
 }
 
 export function ShortlistPage() {
-  const { shortlistRevision } = useCareerChat();
+  const { shortlistRevision, pending, send } = useCareerChat();
+  const router = useRouter();
   const { result, retry } = useStudentResource<SavedJob[]>("/api/shortlist", shortlistRevision);
   const jobs = result?.data;
 
@@ -136,7 +138,19 @@ export function ShortlistPage() {
             <div className="job-grid">
               {jobs.map((entry) => (
                 <JobCard key={entry.job_id} job={entry.job} score={entry.match_score}
-                  action={entry.reason && <p className="muted">{entry.reason} when saved</p>} />
+                  action={
+                    <div className="shortlist-actions">
+                      {entry.reason && <p className="muted">{entry.reason} when saved</p>}
+                      <button type="button" className="secondary-button" disabled={pending}
+                        aria-label={`Draft cover note for ${entry.job.title} at ${entry.job.company}`}
+                        onClick={() => {
+                          void send(`Draft a cover note for my shortlisted job #${entry.job_id}.`);
+                          router.push("/");
+                        }}>
+                        Draft cover note <Icon name="arrow" size={16} />
+                      </button>
+                    </div>
+                  } />
               ))}
             </div>
           </section>

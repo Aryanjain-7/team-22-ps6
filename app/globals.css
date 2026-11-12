@@ -463,6 +463,7 @@ svg { flex-shrink: 0; }
 .chip[data-tone="match"] { background: var(--match-bg); color: var(--match-ink); }
 .chip[data-tone="gap"] { background: var(--gap-bg); color: var(--gap-ink); }
 .job-action { margin-top: auto; padding-top: 4px; font-size: .82rem; }
+.shortlist-actions { display: grid; justify-items: start; gap: 8px; }
 
 .identity {
   display: flex;

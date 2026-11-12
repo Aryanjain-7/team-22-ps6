@@ -8,10 +8,10 @@ import { Icon, type IconName } from "./Icon";
 import { JobCard } from "./JobCard";
 import { PageHeading } from "./PageHeading";
 
-const prompts: { title: string; detail: string; text: string; icon: IconName }[] = [
-  { title: "Find jobs in Chennai", detail: "Rank roles by my skills", text: "Find eligible jobs in Chennai and rank them by how well my skills match.", icon: "pin" },
-  { title: "Explore skill gaps", detail: "Compare data analyst roles", text: "Which skills am I missing for eligible data analyst roles?", icon: "layers" },
-  { title: "Find remote work", detail: "Explore eligible remote roles", text: "Show me remote jobs I’m eligible for and explain the best matches.", icon: "briefcase" },
+const prompts: { title: string; detail: string; text: string; icon: IconName; review?: true }[] = [
+  { title: "Shortlist Chennai’s top 3", detail: "Rank roles by my skills", text: "Find jobs in Chennai that match my skills and save the top 3.", icon: "pin", review: true },
+  { title: "Explore skill gaps", detail: "Compare data analyst roles", text: "Which skills am I missing for data analyst roles?", icon: "layers" },
+  { title: "Add Docker and search again", detail: "Update my skills and rerank roles", text: "I just learned Docker, add it to my profile and search again.", icon: "plus", review: true },
   { title: "Browse internships", detail: "Compare entry-level opportunities", text: "Find internships I’m eligible for and rank them by skill match.", icon: "bookmark" },
 ];
 
@@ -20,6 +20,7 @@ const initialMatchCount = 4;
 function jobMatches(steps: AgentStep[]) {
   const matches = new Map<number, JobMatch>();
   for (const step of steps) {
+    if (step.tool === "updateMySkills" && step.ok) matches.clear();
     if (!step.ok || !step.result) continue;
     const results = step.tool === "searchJobs" ? (step.result as { matches: JobMatch[] }).matches :
       step.tool === "scoreJobMatch" ? [step.result as JobMatch] : [];
@@ -56,11 +57,11 @@ function Activity({ steps }: { steps: AgentStep[] }) {
   );
 }
 
-function PromptChoices({ onChoose }: { onChoose: (text: string) => void }) {
+function PromptChoices({ onChoose }: { onChoose: (prompt: typeof prompts[number]) => void }) {
   return (
     <div className="prompts">
       {prompts.map((prompt) => (
-        <button key={prompt.title} type="button" className="surface prompt" onClick={() => onChoose(prompt.text)}>
+        <button key={prompt.title} type="button" className="surface prompt" onClick={() => onChoose(prompt)}>
           <span className="tile-icon"><Icon name={prompt.icon} size={18} /></span>
           <span className="prompt-copy"><strong>{prompt.title}</strong><span>{prompt.detail}</span></span>
           <Icon name="arrow" size={16} />
@@ -119,6 +120,12 @@ export default function AgentChat() {
     setShowPrompts(false);
   }
 
+  function preparePrompt(text: string) {
+    setInput(text);
+    setShowPrompts(false);
+    inputRef.current?.focus();
+  }
+
   useEffect(() => {
     if (!messages.length) return;
     turnRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -146,7 +153,10 @@ export default function AgentChat() {
             <h2>Find your next role.</h2>
             <p>Start with a suggested search or ask in your own words.</p>
           </div>
-          <PromptChoices onChoose={(text) => void send(text)} />
+          <PromptChoices onChoose={({ text, review }) => {
+            if (review) preparePrompt(text);
+            else void send(text);
+          }} />
         </div>
       ) : (
         <div className="transcript" role="log" aria-label="Conversation">
@@ -186,11 +196,7 @@ export default function AgentChat() {
       }}>
         {showPrompts && (
           <div id="composer-prompts" ref={promptPanelRef} className="surface composer-prompts">
-            <PromptChoices onChoose={(text) => {
-              setInput(text);
-              setShowPrompts(false);
-              inputRef.current?.focus();
-            }} />
+            <PromptChoices onChoose={({ text }) => preparePrompt(text)} />
           </div>
         )}
         {pending && <p className="chat-status" role="status"><span className="status-dot" /> CareerMatch is working…</p>}

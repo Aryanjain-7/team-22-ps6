@@ -19,7 +19,13 @@ The team passcode opens the seeded student demo. A teammate can also use the pas
 - [Five-slide submission PDF](output/pdf/CareerMatch-Team-22.pdf)
 - Team passcode: the team lead provides it privately in the submission form.
 
-Start in **Team demo** mode. Open **My Profile**, then ask “Find eligible data analyst jobs in Chennai and save the top match.” Expand **Agent activity** to show Gemini’s tool choices. Open **My Shortlist** to show the persisted row. A repeat save reports the existing entry. Ask “Can you find that one for me?” in a new chat to demonstrate how the assistant handles an unclear request.
+Start in **Team demo** mode as Divya K (S001) and open **My Profile**. Try the PS6 prompts in Job Search Chat:
+
+1. “Find jobs in Chennai that match my skills and save the top 3.”
+2. “Which skills am I missing for data analyst roles?”
+3. “I just learned Docker, add it to my profile and search again.”
+
+Expand **Agent activity** to see Gemini’s tool choices. Open **My Shortlist** to check the saved roles and choose **Draft cover note** on one of them. A repeat save reports the existing entry. Ask “Can you find that one for me?” in a new chat to demonstrate how the assistant handles an unclear request.
 
 ## Agent tools
 
@@ -28,6 +34,7 @@ Start in **Team demo** mode. Open **My Profile**, then ask “Find eligible data
 | `getMyProfile` | Read | Loads the signed-in student's profile and skills. |
 | `searchJobs` | Read | Filters by CGPA, branch, deadline, and requested criteria, then ranks eligible roles. |
 | `scoreJobMatch` | Read | Calculates the share of required skills the student already has and lists the missing skills. |
+| `getShortlistedJob` | Read | Verifies that the job is saved and eligible, then returns listing and skill match data for a cover note draft. |
 | `saveToShortlist` | Write | Rechecks eligibility and saves the job once per student. |
 | `updateMySkills` | Write | Adds a skill to the signed-in profile without dropping existing skills. |
 
