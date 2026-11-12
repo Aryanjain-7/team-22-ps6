@@ -6,20 +6,27 @@ CareerMatch helps the seeded student discover eligible roles, compare required s
 
 ## Run locally
 
-Use Node.js 20.9 or newer and install the locked dependencies.
+Use Node.js 22 or newer, the Supabase CLI, and the PostgreSQL `psql` client. The local database runs separately from any hosted project.
 
 ```sh
 npm ci
-cp .env.example .env.local
+supabase start --runtime native
+npm run db:local
+npm run dev -- --webpack --hostname 127.0.0.1
 ```
 
-1. Create a Supabase project in Mumbai and open its SQL Editor.
-2. Run `seed/00_starter_example.sql` and `seed/ps6_job_match.sql` in that order. Use a fresh project. The PS6 seed drops and recreates its three tables.
-3. Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `APP_PASSCODE` in `.env.local`. Use the trainer-approved Gemini model. The PS6 brief specifies `gemini-3.8-flash` as its default.
-4. Run `npm run dev`, open [localhost:3000](http://localhost:3000), and enter the passcode. `/api/health` reports missing variable names.
+The native Supabase runtime supports Apple silicon and Linux. With a Docker-compatible runtime, use `supabase start --runtime docker` instead. If the CLI is installed outside your path, set `SUPABASE_BIN` to its executable when running `npm run db:local`.
 
-Keep `.env.local` out of Git. Use the same server environment variable names if deploying to Vercel.
+The database setup applies the official seed to a fresh local project and configures `.env.local`. Add a Google AI Studio key to `GEMINI_API_KEY` in that file and use the trainer-approved `GEMINI_MODEL`. Open [localhost:3000](http://localhost:3000) and sign in using the local `APP_PASSCODE` value. `/api/health` lists which settings are configured.
 
+## Prepare a hosted deployment
+
+1. Create a dedicated Supabase project in Mumbai. Enable its Data API.
+2. Run `node scripts/database-sql.mjs > careermatch-bootstrap.sql` and apply the generated SQL in the fresh project's SQL Editor. The bootstrap aborts if an application table already exists. For a database already seeded with the starter and PS6 files, review and apply `supabase/production.sql` instead.
+3. Import this repository into Vercel. Set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and a separate strong `APP_PASSCODE` in the production environment. Keep the API keys and passcode in Vercel's secret fields.
+4. Run the checks below, deploy, then sign in and run the demo. Use your own team passcode. `.env.local` stays outside Git.
+
+The hackathon workspace uses one shared student profile. The database ranks and limits search results before returning them to the app, so Supabase's row cap does not truncate the candidate set.
 ## Demo
 
 - Open My Profile to view the current skills, branch, and CGPA for S001.

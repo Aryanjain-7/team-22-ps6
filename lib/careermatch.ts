@@ -42,22 +42,16 @@ export async function searchEligibleJobs(filters: {
   workMode?: Job["work_mode"];
   jobType?: Job["job_type"];
 }) {
-  const profile = await readProfile();
-  const today = todayInIndia();
-  const { data, error } = await getSupabase().from("jobs").select(JOB_COLUMNS)
-    .lte("min_cgpa", profile.cgpa).gte("apply_by", today)
-    .contains("eligible_branches", [profile.branch]).order("id").returns<Job[]>();
+  const { data, error } = await getSupabase().rpc("careermatch_search", {
+    profile_ref: STUDENT,
+    eligible_on: todayInIndia(),
+    city_filter: filters.city ? normalize(filters.city) : null,
+    role_filter: filters.role ? normalize(filters.role) : null,
+    mode_filter: filters.workMode ?? null,
+    type_filter: filters.jobType ?? null,
+  }).returns<{ count: number; matches: JobMatch[] }>();
   if (error) throw new Error("Could not search the jobs database.");
-  const role = normalize(filters.role ?? "");
-  const city = normalize(filters.city ?? "");
-  return data.filter((job) => (
-    (!city || normalize(job.city) === city) &&
-    (!role || normalize(job.title).includes(role)) &&
-    (!filters.workMode || job.work_mode === filters.workMode) &&
-    (!filters.jobType || job.job_type === filters.jobType)
-  )).map((job) => compareSkills(profile, job))
-    .sort((first, second) => second.score - first.score ||
-      first.job.apply_by.localeCompare(second.job.apply_by) || first.job.id - second.job.id);
+  return data;
 }
 
 export async function scoreEligibleJob(id: number) {

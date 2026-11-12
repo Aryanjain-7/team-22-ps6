@@ -1,5 +1,5 @@
 import "server-only";
-import type { Content, Part } from "@google/genai";
+import { ThinkingLevel, type Content, type Part } from "@google/genai";
 import { getGemini } from "../gemini";
 import { GEMINI_MODEL } from "../env";
 import type { ChatMessage } from "../schemas";
@@ -10,6 +10,7 @@ import type { AgentResult, AgentStep } from "./types";
 
 /** Stops the agent from looping forever and using up your Gemini quota. */
 const MAX_ROUNDS = 5;
+const AGENT_DEADLINE_MS = 45_000;
 
 /**
  * THE AGENT LOOP
@@ -22,6 +23,7 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
   const ai = getGemini();
   const steps: AgentStep[] = [];
   const functionDeclarations = toFunctionDeclarations(tools);
+  const deadline = AbortSignal.timeout(AGENT_DEADLINE_MS);
 
   const contents: Content[] = messages.map((m) => ({
     role: m.role,
@@ -36,9 +38,13 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
         systemInstruction: buildSystemPrompt(),
         tools: [{ functionDeclarations }],
         temperature: 0.2,
+        maxOutputTokens: 2048,
+        abortSignal: deadline,
+        httpOptions: { timeout: 15_000, retryOptions: { attempts: 2, initialDelay: 0.5 } },
+        ...(GEMINI_MODEL === "gemini-3.8-flash" && { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }),
       },
     }).catch((error: unknown) => {
-      if (!steps.length) throw error;
+      if (!steps.length) throw deadline.aborted ? deadline.reason : error;
       return null;
     });
 
@@ -62,6 +68,9 @@ export async function runAgent(messages: ChatMessage[]): Promise<AgentResult> {
 
     const responseParts: Part[] = [];
     for (const call of calls) {
+      if (deadline.aborted) {
+        return { reply: "This request timed out. Check Agent activity for completed operations.", steps };
+      }
       const step = await runTool(call.name ?? "", call.args ?? {});
       steps.push(step);
       responseParts.push({

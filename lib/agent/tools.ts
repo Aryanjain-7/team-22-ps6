@@ -21,10 +21,7 @@ export const tools: AgentTool[] = [
       workMode: z.enum(["Onsite", "Hybrid", "Remote"]).optional(),
       jobType: z.enum(["Full-time", "Internship"]).optional(),
     }),
-    run: async (filters) => {
-      const matches = await searchEligibleJobs(filters);
-      return { count: matches.length, matches: matches.slice(0, 12) };
-    },
+    run: searchEligibleJobs,
   }),
   defineTool({
     name: "scoreJobMatch",
