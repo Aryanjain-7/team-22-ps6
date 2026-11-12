@@ -137,10 +137,10 @@ export function ShortlistPage() {
             <h2 className="saved-heading" id="saved-heading">{jobs.length} saved {jobs.length === 1 ? "role" : "roles"}</h2>
             <div className="job-grid">
               {jobs.map((entry) => (
-                <JobCard key={entry.job_id} job={entry.job} score={entry.match_score}
+                <JobCard key={entry.job_id} job={entry.job} score={entry.currentMatch?.score ?? null}
+                  skills={entry.currentMatch ?? undefined}
                   action={
                     <div className="shortlist-actions">
-                      {entry.reason && <p className="muted">{entry.reason} when saved</p>}
                       <button type="button" className="secondary-button" disabled={pending}
                         aria-label={`Draft cover note for ${entry.job.title} at ${entry.job.company}`}
                         onClick={() => {

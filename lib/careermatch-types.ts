@@ -37,6 +37,7 @@ export type SavedJob = {
   match_score: number | null;
   reason: string | null;
   created_at: string;
+  currentMatch: Pick<JobMatch, "score" | "matched" | "missing"> | null;
 };
 
 export const toolNames = {

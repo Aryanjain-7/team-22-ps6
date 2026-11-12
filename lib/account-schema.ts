@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeProfileSkills } from "./skills";
 
 export const branches = ["CSE", "IT", "AI & DS", "ECE", "EEE"] as const;
 
@@ -19,6 +20,6 @@ export const profileDetails = z.object({
   grad_year: z.number().int().min(2000).max(2100),
   cgpa: z.number().min(0).max(10).multipleOf(0.1),
   preferred_cities: list,
-  skills: list.transform((values) => [...new Set(values.map((skill) => skill.toLowerCase()))]),
+  skills: list.transform(normalizeProfileSkills).pipe(list),
   interests: z.string().trim().max(250).transform((value) => value || null),
 }).strict();

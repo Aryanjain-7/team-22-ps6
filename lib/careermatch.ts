@@ -4,16 +4,21 @@ import { todayInIndia } from "./dates";
 import type { z } from "zod";
 import type { profileDetails } from "./account-schema";
 import type { Job, JobMatch, Profile, SavedJob } from "./careermatch-types";
+import { normalizeProfileSkills, normalizeSkill } from "./skills";
 
 const JOB_COLUMNS = "id,title,company,city,work_mode,job_type,min_cgpa,eligible_branches,required_skills,apply_by,description";
-const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
 
-export async function findProfile(profileId: string): Promise<Profile | null> {
+async function findStoredProfile(profileId: string): Promise<Profile | null> {
   const { data, error } = await getSupabase().from("profiles")
     .select("id,name,degree,branch,grad_year,cgpa,preferred_cities,skills,interests")
     .eq("id", profileId).maybeSingle<Profile>();
   if (error) throw new Error("The student profile is unavailable.");
   return data;
+}
+
+export async function findProfile(profileId: string): Promise<Profile | null> {
+  const profile = await findStoredProfile(profileId);
+  return profile && { ...profile, skills: normalizeProfileSkills(profile.skills) };
 }
 
 export async function readProfile(profileId: string): Promise<Profile> {
@@ -41,8 +46,8 @@ function isEligible(profile: Profile, job: Job, today: string) {
 }
 
 function compareSkills(profile: Profile, job: Job): JobMatch {
-  const current = new Set(profile.skills.map(normalize));
-  const required = [...new Set(job.required_skills.map(normalize).filter(Boolean))];
+  const current = new Set(profile.skills);
+  const required = [...new Set(job.required_skills.map(normalizeSkill).filter(Boolean))];
   const matched = required.filter((skill) => current.has(skill));
   const missing = required.filter((skill) => !current.has(skill));
   return { job, score: required.length ? Math.round(matched.length * 100 / required.length) : 100, matched, missing };
@@ -57,8 +62,8 @@ export async function searchEligibleJobs(profileId: string, filters: {
   const { data, error } = await getSupabase().rpc("careermatch_search", {
     profile_ref: profileId,
     eligible_on: todayInIndia(),
-    city_filter: filters.city ? normalize(filters.city) : null,
-    role_filter: filters.role ? normalize(filters.role) : null,
+    city_filter: filters.city ? normalizeSkill(filters.city) : null,
+    role_filter: filters.role ? normalizeSkill(filters.role) : null,
     mode_filter: filters.workMode ?? null,
     type_filter: filters.jobType ?? null,
   }).returns<{ count: number; matches: JobMatch[] }>();
@@ -75,12 +80,17 @@ export async function scoreEligibleJob(profileId: string, id: number) {
 }
 
 export async function readShortlist(profileId: string): Promise<SavedJob[]> {
+  const profile = await findProfile(profileId);
   const { data, error } = await getSupabase().from("shortlists")
     .select(`job_id,match_score,reason,created_at,job:jobs!inner(${JOB_COLUMNS})`)
     .eq("profile_id", profileId).order("created_at", { ascending: false })
-    .order("id", { ascending: false }).returns<SavedJob[]>();
+    .order("id", { ascending: false }).returns<Omit<SavedJob, "currentMatch">[]>();
   if (error) throw new Error("Could not load your shortlist.");
-  return data;
+  return data.map((entry) => {
+    if (!profile) return { ...entry, currentMatch: null };
+    const { score, matched, missing } = compareSkills(profile, entry.job);
+    return { ...entry, currentMatch: { score, matched, missing } };
+  });
 }
 
 export async function readShortlistedJobMatch(profileId: string, id: number) {
@@ -105,16 +115,19 @@ export async function saveEligibleJob(profileId: string, id: number) {
 }
 
 export async function addSkill(profileId: string, skill: string) {
-  const normalized = normalize(skill);
+  const normalized = normalizeProfileSkills([skill]);
   for (let attempt = 0; attempt < 3; attempt++) {
-    const profile = await readProfile(profileId);
-    if (profile.skills.some((value) => normalize(value) === normalized)) {
-      return { skills: profile.skills, added: false };
+    const profile = await findStoredProfile(profileId);
+    if (!profile) throw new Error("Add your academic details on My Profile before searching.");
+    const skills = normalizeProfileSkills(profile.skills);
+    const updated = [...new Set([...skills, ...normalized])];
+    if (updated.length === skills.length) {
+      return { skills, added: false };
     }
     // Compare the old array so simultaneous updates cannot erase each other's skills.
     const previous = `{${profile.skills.map((value) => JSON.stringify(value)).join(",")}}`;
     const { data, error } = await getSupabase().from("profiles")
-      .update({ skills: [...profile.skills, normalized] }).eq("id", profileId)
+      .update({ skills: updated }).eq("id", profileId)
       .eq("skills", previous).select("skills").maybeSingle<{ skills: string[] }>();
     if (error) throw new Error("Could not update your skills. Try again.");
     if (data) return { skills: data.skills, added: true };

@@ -62,7 +62,9 @@ export function ProfileEditor({ profile, onSaved, onCancel }: {
         <label>Preferred cities<input name="preferred_cities" defaultValue={profile?.preferred_cities.join(", ")}
           placeholder="Chennai, Bengaluru" maxLength={400} /></label>
         <label className="profile-form-wide">Skills<input name="skills" defaultValue={profile?.skills.join(", ")}
-          placeholder="Python, SQL, Git" maxLength={600} /></label>
+          placeholder="Python, C++, LLM APIs" maxLength={600} aria-describedby="skills-hint" />
+          <small id="skills-hint" className="muted">Separate skills with commas.</small>
+        </label>
         <label className="profile-form-wide">Interests<textarea name="interests" rows={2} defaultValue={profile?.interests ?? ""}
           maxLength={250} /></label>
       </div>

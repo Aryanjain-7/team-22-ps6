@@ -29,15 +29,34 @@ create or replace function public.careermatch_search(
 language sql stable security invoker
 set search_path = ''
 as $$
-  with candidate_jobs as (
+  with student as materialized (
+    select p.cgpa, p.branch,
+      array(
+        select distinct skill
+        from unnest(p.skills) as stored(value)
+        cross join lateral regexp_split_to_table(stored.value, E'[,;\\r\\n]+') as entry(value)
+        cross join lateral (
+          select lower(btrim(regexp_replace(entry.value, '[[:space:]]+', ' ', 'g'))) as value
+        ) normalized
+        cross join lateral (
+          select string_to_array(normalized.value, ' ') as values
+        ) words
+        cross join lateral unnest(case when words.values <@ array[
+          'bash', 'c', 'c#', 'c++', 'css', 'docker', 'excel', 'figma', 'git', 'go', 'html',
+          'java', 'javascript', 'kotlin', 'kubernetes', 'linux', 'node.js', 'numpy', 'pandas',
+          'php', 'postgresql', 'python', 'react', 'ruby', 'rust', 'sql', 'swift', 'tableau', 'typescript'
+        ] then words.values else array[normalized.value] end) as expanded(skill)
+        where skill <> ''
+      ) as skills
+    from public.profiles p where p.id = profile_ref
+  ), candidate_jobs as (
     select j.id, j.apply_by, j.required_skills, p.skills,
       to_jsonb(j) - array['nice_to_have', 'salary_lpa_min', 'salary_lpa_max'] as job
-    from public.profiles p
+    from student p
     join public.jobs j on j.min_cgpa <= p.cgpa
       and j.apply_by >= eligible_on
       and j.eligible_branches @> array[p.branch]
-    where p.id = profile_ref
-      and (city_filter is null or lower(j.city) = city_filter)
+    where (city_filter is null or lower(j.city) = city_filter)
       and (role_filter is null or strpos(lower(j.title), role_filter) > 0)
       and (mode_filter is null or j.work_mode = mode_filter)
       and (type_filter is null or j.job_type = type_filter)
@@ -50,19 +69,15 @@ as $$
     cross join lateral (
       select
         coalesce(array_agg(r.skill order by r.position)
-          filter (where r.skill = any (student.skills)), '{}'::text[]) as matched,
+          filter (where r.skill = any (candidate_jobs.skills)), '{}'::text[]) as matched,
         coalesce(array_agg(r.skill order by r.position)
-          filter (where r.skill <> all (student.skills)), '{}'::text[]) as missing
+          filter (where r.skill <> all (candidate_jobs.skills)), '{}'::text[]) as missing
       from (
         select lower(btrim(regexp_replace(skill, '[[:space:]]+', ' ', 'g'))) as skill,
           min(position) as position
         from unnest(candidate_jobs.required_skills) with ordinality as required(skill, position)
         group by 1
       ) r
-      cross join lateral (
-        select array(select lower(btrim(regexp_replace(skill, '[[:space:]]+', ' ', 'g')))
-          from unnest(candidate_jobs.skills) as known(skill) where skill is not null) as skills
-      ) student
       where r.skill <> ''
     ) parts
   ), top_matches as (
