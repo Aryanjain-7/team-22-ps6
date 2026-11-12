@@ -4,6 +4,9 @@
   color-scheme: light dark;
   --canvas: light-dark(#edf0eb, #141a18);
   --wash: light-dark(#dcebe0, #1c332a);
+  --aurora-primary: light-dark(rgb(85 181 145 / 36%), rgb(46 145 112 / 32%));
+  --aurora-secondary: light-dark(rgb(212 186 104 / 26%), rgb(145 126 66 / 24%));
+  --aurora-edge: light-dark(rgb(116 179 189 / 29%), rgb(50 126 139 / 26%));
   --surface: light-dark(#f9faf7, #1e2723);
   --raised: light-dark(#fff, #28342e);
   --glass-solid: light-dark(#f6f8f4, #222d28);
@@ -40,6 +43,9 @@
 :root[data-palette="sapphire"] {
   --canvas: light-dark(#edf2f8, #151d29);
   --wash: light-dark(#dce8fb, #20334e);
+  --aurora-primary: light-dark(rgb(103 145 223 / 34%), rgb(66 111 204 / 32%));
+  --aurora-secondary: light-dark(rgb(138 122 222 / 24%), rgb(115 88 194 / 26%));
+  --aurora-edge: light-dark(rgb(85 183 193 / 26%), rgb(52 142 161 / 24%));
   --surface: light-dark(#f9fbfe, #202b3a);
   --raised: light-dark(#fff, #2b384a);
   --glass-solid: light-dark(#f3f7fc, #243143);
@@ -60,6 +66,9 @@
 :root[data-palette="plum"] {
   --canvas: light-dark(#f4eef2, #211923);
   --wash: light-dark(#f0dfea, #39293f);
+  --aurora-primary: light-dark(rgb(189 115 184 / 29%), rgb(157 72 139 / 33%));
+  --aurora-secondary: light-dark(rgb(226 155 127 / 24%), rgb(171 95 74 / 25%));
+  --aurora-edge: light-dark(rgb(146 134 206 / 26%), rgb(106 87 175 / 27%));
   --surface: light-dark(#fcf9fc, #2b222e);
   --raised: light-dark(#fff, #382b3c);
   --glass-solid: light-dark(#faf3f8, #2e2532);
@@ -81,10 +90,56 @@
 html { min-width: 0; scroll-padding: 96px 0 110px; }
 body {
   @apply antialiased;
+  isolation: isolate;
   margin: 0;
   color: var(--ink);
   font-family: Geist, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: radial-gradient(ellipse 850px 440px at 50% 0%, var(--wash), transparent), var(--canvas);
+}
+.ambient-background {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ambient-background::before,
+.ambient-background::after {
+  content: "";
+  position: absolute;
+  width: 106%;
+  height: 85%;
+  animation: aurora-drift 21s ease-in-out infinite alternate;
+}
+.ambient-background::before {
+  top: -20%;
+  left: -22%;
+  background:
+    radial-gradient(ellipse 46% 45% at 47% 47%, var(--aurora-primary), transparent),
+    radial-gradient(ellipse 29% 40% at 69% 57%, var(--aurora-edge), transparent);
+  --aurora-x: 27%;
+  --aurora-y: 20%;
+  --aurora-turn: 13deg;
+}
+.ambient-background::after {
+  right: -27%;
+  bottom: -14%;
+  background:
+    radial-gradient(ellipse 36% 42% at 63% 43%, var(--aurora-secondary), transparent),
+    radial-gradient(ellipse 38% 36% at 39% 61%, var(--aurora-edge), transparent);
+  --aurora-x: -27%;
+  --aurora-y: -15%;
+  --aurora-turn: -14deg;
+  animation-duration: 27s;
+  animation-delay: -10s;
+}
+@keyframes aurora-drift {
+  from { transform: translate3d(0, 0, 0) rotate(0); }
+  to { transform: translate3d(var(--aurora-x), var(--aurora-y), 0) rotate(var(--aurora-turn)); }
+}
+:root[data-background-motion="paused"] .ambient-background::before,
+:root[data-background-motion="paused"] .ambient-background::after {
+  animation-play-state: paused;
 }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; }
@@ -250,6 +305,18 @@ svg { flex-shrink: 0; }
   border: 1px solid var(--line);
   border-radius: 9px;
   font-size: .8rem;
+  cursor: pointer;
+}
+.motion-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  font-size: .84rem;
+  font-weight: 630;
   cursor: pointer;
 }
 .logout-error { padding: 10px 14px; }
@@ -542,11 +609,14 @@ svg { flex-shrink: 0; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .glass { background: var(--glass-solid); border-color: var(--strong-line); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .ambient-background, .motion-option { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .motion-option { display: none; }
 }
 @media (forced-colors: active) {
+  .ambient-background, .motion-option { display: none; }
   .glass, .surface, .chip, .score, .primary-button, .secondary-button, .send-button { border: 1px solid ButtonText; }
   .nav-link[aria-current="page"] { border-color: Highlight; color: Highlight; }
   :focus-visible { outline-color: Highlight; }

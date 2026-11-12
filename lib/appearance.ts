@@ -24,4 +24,7 @@ export const appearanceScript = `try {
   if (${JSON.stringify(modes.map(({ id }) => id))}.includes(saved?.mode)) {
     document.documentElement.dataset.appearance = saved.mode;
   }
+  if (saved?.animateBackground === false) {
+    document.documentElement.dataset.backgroundMotion = "paused";
+  }
 } catch {}`;

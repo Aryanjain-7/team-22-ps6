@@ -7,14 +7,16 @@ import { Icon } from "./Icon";
 export function AppearanceMenu() {
   const [palette, setPalette] = useState<Palette>("jade");
   const [mode, setMode] = useState<AppearanceMode>("system");
+  const [animateBackground, setAnimateBackground] = useState(true);
   const menu = useRef<HTMLDetailsElement>(null);
 
   useEffect(() => {
-    const { palette, appearance } = document.documentElement.dataset;
+    const { palette, appearance, backgroundMotion } = document.documentElement.dataset;
     const savedPalette = palettes.find(({ id }) => id === palette);
     const savedMode = modes.find(({ id }) => id === appearance);
     if (savedPalette) setPalette(savedPalette.id);
     if (savedMode) setMode(savedMode.id);
+    setAnimateBackground(backgroundMotion !== "paused");
 
     function closeOutside(event: PointerEvent) {
       const details = menu.current;
@@ -27,13 +29,17 @@ export function AppearanceMenu() {
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, []);
 
-  function changeAppearance(nextPalette: Palette, nextMode: AppearanceMode) {
+  function changeAppearance(nextPalette: Palette, nextMode: AppearanceMode, nextMotion = animateBackground) {
     document.documentElement.dataset.palette = nextPalette;
     document.documentElement.dataset.appearance = nextMode;
+    document.documentElement.dataset.backgroundMotion = nextMotion ? "playing" : "paused";
     setPalette(nextPalette);
     setMode(nextMode);
+    setAnimateBackground(nextMotion);
     try {
-      localStorage.setItem(appearanceKey, JSON.stringify({ palette: nextPalette, mode: nextMode }));
+      localStorage.setItem(appearanceKey, JSON.stringify({
+        palette: nextPalette, mode: nextMode, animateBackground: nextMotion,
+      }));
     } catch {
       // Appearance still applies when browser storage is unavailable.
     }
@@ -79,6 +85,11 @@ export function AppearanceMenu() {
             ))}
           </div>
         </fieldset>
+        <label className="motion-option">
+          <input type="checkbox" checked={animateBackground}
+            onChange={(event) => changeAppearance(palette, mode, event.target.checked)} />
+          Animate background
+        </label>
       </div>
     </details>
   );
